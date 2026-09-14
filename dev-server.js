@@ -11,9 +11,15 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 
-// Serverless API bridge for local development
-app.all('/api/submit', (req, res) => {
-  return submitHandler(req, res);
+// Serverless API bridge for local development with hot-reloading
+app.all('/api/submit', async (req, res) => {
+  try {
+    const { default: handler } = await import(`./api/submit.js?t=${Date.now()}`);
+    return handler(req, res);
+  } catch (err) {
+    console.error('API execution error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 async function startServer() {

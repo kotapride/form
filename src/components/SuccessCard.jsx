@@ -1,10 +1,62 @@
 import React, { useState } from 'react';
-import { CheckCircle2, Copy, Check, RotateCcw, FileCheck, ShieldCheck } from 'lucide-react';
+import {
+  CheckCircle2,
+  Copy,
+  Check,
+  RotateCcw,
+  FileCheck,
+  Sparkles,
+  Share2,
+  Send,
+  Loader2,
+  GraduationCap
+} from 'lucide-react';
+
+export function buildCongratulatoryMessage(data) {
+  const studentName = data?.name || data?.fullName || 'Student';
+  const refId = data?.referenceId || data?.submissionId || 'N/A';
+  const course = data?.course || 'Skill Development';
+  const studentClass = data?.studentClass || data?.class || 'N/A';
+  const fatherName = data?.fatherName || data?.father_name || '';
+  const mobile = data?.mobileNumber || data?.phone || '';
+  const alternateMobile = data?.alternateMobile || '';
+  const address = data?.address || '';
+  const photoUrl = data?.remotePhotoUrl || data?.photoUrl || '';
+  const formattedDate = new Date(data?.timestamp || Date.now()).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  });
+
+  return `🎓🎉 *HEARTIEST CONGRATULATIONS, ${studentName.toUpperCase()}!* 🎉🎓
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+✨ *PrepMagic Skill Development Program 2026* ✨
+
+Dear *${studentName}*,
+We are delighted to confirm that your admission registration has been *successfully verified and recorded*! Welcome to PrepMagic! 🚀
+
+📋 *CONFIRMED REGISTRATION DETAILS:*
+• 👤 *Student Name:* ${studentName}
+• 🆔 *Reference ID:* ${refId}
+• 📚 *Class / Grade:* ${studentClass}
+• 🎯 *Course Enrolled:* ${course}
+• 👨‍👦 *Father's Name:* ${fatherName}
+• 📱 *Mobile Number:* ${mobile}
+${alternateMobile ? `• 📞 *Alternate Mobile:* ${alternateMobile}\n` : ''}${address ? `• 📍 *Address:* ${address}\n` : ''}• 🗓️ *Registration Date:* ${formattedDate}
+${photoUrl ? `\n📸 *Student Passport Photo:* \n${photoUrl}\n` : ''}
+🌟 *We wish you tremendous success in your learning journey!* 🌟
+— *Team PrepMagic*
+━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+}
 
 export default function SuccessCard({ submissionData, onReset }) {
   const [copied, setCopied] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   const refId = submissionData?.referenceId || submissionData?.submissionId || 'N/A';
+  const studentName = submissionData?.name || submissionData?.fullName || 'Student';
+  const course = submissionData?.course || 'Skill Development';
+  const photoUrl = submissionData?.remotePhotoUrl || submissionData?.photoUrl;
 
   const handleCopy = () => {
     if (refId) {
@@ -14,42 +66,100 @@ export default function SuccessCard({ submissionData, onReset }) {
     }
   };
 
-  const handleShare = async () => {
+  const handleWhatsAppShare = () => {
+    const textToShare = buildCongratulatoryMessage(submissionData);
+    window.open(`https://wa.me/?text=${encodeURIComponent(textToShare)}`, '_blank');
+  };
+
+  const handleShareWithPhoto = async () => {
     if (!submissionData) return;
-    
-    const textToShare = `*Registration Successful!*\n\n*Name:* ${submissionData.name || submissionData.fullName}\n*Ref ID:* ${refId}\n*Class:* ${submissionData.studentClass}\n*Course:* ${submissionData.course}`;
-    
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'Student Registration Details',
-          text: textToShare,
-        });
-      } catch (err) {
-        console.error('Error sharing', err);
+    const textToShare = buildCongratulatoryMessage(submissionData);
+    setSharing(true);
+
+    try {
+      let fileShared = false;
+      // Try sharing with file if photo is available and browser supports file sharing
+      if (photoUrl && navigator.share && navigator.canShare) {
+        try {
+          const response = await fetch(photoUrl);
+          const blob = await response.blob();
+          const cleanName = studentName.replace(/[^a-zA-Z0-9]/g, '_');
+          const fileToShare = new File([blob], `${cleanName}_photo.jpg`, {
+            type: blob.type || 'image/jpeg'
+          });
+
+          if (navigator.canShare({ files: [fileToShare] })) {
+            await navigator.share({
+              title: `Admission Confirmed - ${studentName}`,
+              text: textToShare,
+              files: [fileToShare]
+            });
+            fileShared = true;
+          }
+        } catch (fileErr) {
+          console.warn('File share attempt failed, falling back:', fileErr);
+        }
       }
-    } else {
-      window.open(`https://wa.me/?text=${encodeURIComponent(textToShare)}`, '_blank');
+
+      if (!fileShared) {
+        if (navigator.share) {
+          await navigator.share({
+            title: `Admission Confirmed - ${studentName}`,
+            text: textToShare
+          });
+        } else {
+          handleWhatsAppShare();
+        }
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        handleWhatsAppShare();
+      }
+    } finally {
+      setSharing(false);
     }
   };
 
   return (
     <div className="success-wrapper">
-      <div className="success-icon-badge">
-        <CheckCircle2 size={44} />
+      {/* Celebration Header Badge */}
+      <div className="success-celebration-badge">
+        <Sparkles size={16} />
+        <span>Admission Registration Confirmed</span>
       </div>
 
-      <h2 className="success-title">Registration Submitted Successfully!</h2>
+      <div className="success-icon-badge">
+        <GraduationCap size={44} />
+      </div>
+
+      <h2 className="success-title">🎉 Heartiest Congratulations, {studentName}! 🎓</h2>
       <p className="success-desc">
-        Your registration details and Aadhaar document have been safely encrypted and received.
+        Your admission registration for <strong>{course}</strong> has been officially confirmed and your documents securely verified.
       </p>
+
+      {/* Student Passport Photo Display */}
+      {photoUrl && (
+        <div className="success-photo-container">
+          <div className="success-photo-frame">
+            <img
+              src={photoUrl}
+              alt={studentName}
+              className="success-student-photo"
+            />
+          </div>
+          <div className="success-photo-badge">
+            <CheckCircle2 size={13} />
+            <span>Verified Student Applicant</span>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Details Card */}
       <div className="receipt-card">
         {/* Reference ID */}
         <div className="receipt-row highlight-row">
           <span className="receipt-label">Reference Tracking ID</span>
-          <span className="receipt-val mono" style={{ color: '#818cf8', fontWeight: 700 }}>
+          <span className="receipt-val mono" style={{ color: '#4f46e5', fontWeight: 700 }}>
             {refId}
             <button
               type="button"
@@ -66,7 +176,7 @@ export default function SuccessCard({ submissionData, onReset }) {
         {/* Student Name */}
         <div className="receipt-row">
           <span className="receipt-label">Student Name</span>
-          <span className="receipt-val">{submissionData?.name || submissionData?.fullName}</span>
+          <span className="receipt-val">{studentName}</span>
         </div>
 
         {/* Mobile Number */}
@@ -76,18 +186,18 @@ export default function SuccessCard({ submissionData, onReset }) {
         </div>
 
         {/* Class */}
-        {submissionData?.studentClass && (
+        {(submissionData?.studentClass || submissionData?.class) && (
           <div className="receipt-row">
             <span className="receipt-label">Class / Grade</span>
-            <span className="receipt-val">{submissionData.studentClass}</span>
+            <span className="receipt-val">{submissionData.studentClass || submissionData.class}</span>
           </div>
         )}
 
         {/* Father's Name */}
-        {submissionData?.fatherName && (
+        {(submissionData?.fatherName || submissionData?.father_name) && (
           <div className="receipt-row">
             <span className="receipt-label">Father's Name</span>
-            <span className="receipt-val">{submissionData.fatherName}</span>
+            <span className="receipt-val">{submissionData.fatherName || submissionData.father_name}</span>
           </div>
         )}
 
@@ -100,10 +210,10 @@ export default function SuccessCard({ submissionData, onReset }) {
         )}
 
         {/* Course */}
-        {submissionData?.course && (
+        {course && (
           <div className="receipt-row">
-            <span className="receipt-label">Course</span>
-            <span className="receipt-val">{submissionData.course}</span>
+            <span className="receipt-label">Enrolled Course</span>
+            <span className="receipt-val" style={{ color: '#4338ca', fontWeight: 700 }}>{course}</span>
           </div>
         )}
 
@@ -120,25 +230,49 @@ export default function SuccessCard({ submissionData, onReset }) {
         {/* Document */}
         {submissionData?.fileName && (
           <div className="receipt-row">
-            <span className="receipt-label">Aadhaar File</span>
-            <span className="receipt-val" style={{ fontSize: '0.85rem', color: '#a5b4fc' }}>
+            <span className="receipt-label">Aadhaar Document</span>
+            <span className="receipt-val" style={{ fontSize: '0.85rem', color: '#4f46e5' }}>
               <FileCheck size={14} style={{ display: 'inline', marginRight: 4 }} />
               {submissionData.fileName}
             </span>
           </div>
         )}
-
       </div>
 
-      <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-        <button type="button" onClick={handleShare} style={{ flex: 1, backgroundColor: '#10b981', color: 'white', padding: '12px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
-          Share via WhatsApp
+      {/* Share Actions Grid */}
+      <div className="success-actions-grid">
+        <button
+          type="button"
+          onClick={handleWhatsAppShare}
+          className="btn-whatsapp-share"
+          title="Share celebratory message & student photo link on WhatsApp"
+        >
+          <Send size={18} />
+          <span>Share on WhatsApp</span>
         </button>
-        <button type="button" className="btn-secondary" onClick={onReset} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: '8px', border: '1px solid #4f46e5', background: 'transparent', color: '#4f46e5', cursor: 'pointer', fontWeight: 600 }}>
+
+        <button
+          type="button"
+          onClick={handleShareWithPhoto}
+          className="btn-native-share"
+          disabled={sharing}
+          title="Share full congratulatory details and student photo file"
+        >
+          {sharing ? <Loader2 size={18} className="spin" /> : <Share2 size={18} />}
+          <span>{sharing ? 'Sharing Photo...' : 'Share Details & Photo'}</span>
+        </button>
+
+        <button
+          type="button"
+          className="btn-secondary"
+          onClick={onReset}
+          style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+        >
           <RotateCcw size={16} />
-          <span>Register Another</span>
+          <span>Register Another Student</span>
         </button>
       </div>
     </div>
   );
 }
+

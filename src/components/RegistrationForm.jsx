@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './RegistrationForm.css';
+import { buildCongratulatoryMessage } from './SuccessCard';
 
 const CLASS_OPTIONS = [
   '1st Class',
@@ -37,6 +38,8 @@ export default function RegistrationForm({ onSuccess }) {
 
   const [file, setFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
+  const [photo, setPhoto] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [loading, setLoading] = useState(false);
@@ -44,15 +47,19 @@ export default function RegistrationForm({ onSuccess }) {
   const [submittedData, setSubmittedData] = useState(null);
 
   const fileInputRef = useRef(null);
+  const photoInputRef = useRef(null);
 
-  // Clean up blob preview URL on unmount or file change
+  // Clean up blob preview URLs on unmount or file change
   useEffect(() => {
     return () => {
       if (filePreview && filePreview.startsWith('blob:')) {
         URL.revokeObjectURL(filePreview);
       }
+      if (photoPreview && photoPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(photoPreview);
+      }
     };
-  }, [filePreview]);
+  }, [filePreview, photoPreview]);
 
   // Handle standard text input changes
   const handleChange = (e) => {
@@ -113,6 +120,9 @@ export default function RegistrationForm({ onSuccess }) {
         if (!formData.address.trim()) msg = 'Address is required.';
         else if (formData.address.trim().length < 5) msg = 'Address must be at least 5 characters.';
         break;
+      case 'photo':
+        if (!photo) msg = 'Student passport-size photo is required.';
+        break;
       case 'file':
         if (!file) msg = 'Aadhaar Card document (Image or PDF) is required.';
         break;
@@ -122,6 +132,50 @@ export default function RegistrationForm({ onSuccess }) {
 
     setErrors((prev) => ({ ...prev, [field]: msg }));
     return !msg;
+  };
+
+  // Handle student photo selection (max 5MB, image only)
+  const handlePhotoChange = (selectedPhoto) => {
+    if (!selectedPhoto) return;
+
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    const validImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+
+    if (!validImageTypes.includes(selectedPhoto.type)) {
+      setErrors((prev) => ({
+        ...prev,
+        photo: 'Invalid format. Please upload an image (JPG, PNG, WebP).'
+      }));
+      return;
+    }
+
+    if (selectedPhoto.size > maxSize) {
+      setErrors((prev) => ({
+        ...prev,
+        photo: `Photo size exceeds 5MB (${(selectedPhoto.size / (1024 * 1024)).toFixed(2)}MB).`
+      }));
+      return;
+    }
+
+    setPhoto(selectedPhoto);
+    setErrors((prev) => ({ ...prev, photo: null }));
+
+    if (photoPreview && photoPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(photoPreview);
+    }
+    const url = URL.createObjectURL(selectedPhoto);
+    setPhotoPreview(url);
+  };
+
+  const handleRemovePhoto = () => {
+    if (photoPreview && photoPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(photoPreview);
+    }
+    setPhoto(null);
+    setPhotoPreview(null);
+    if (photoInputRef.current) {
+      photoInputRef.current.value = '';
+    }
   };
 
   // Handle file selection and validation (max 5MB, image/* or pdf)
@@ -193,6 +247,7 @@ export default function RegistrationForm({ onSuccess }) {
     if (!formData.address.trim()) newErrors.address = 'Address is required.';
     else if (formData.address.trim().length < 5) newErrors.address = 'Address must be at least 5 characters.';
 
+    if (!photo) newErrors.photo = 'Student passport-size photo is required.';
     if (!file) newErrors.file = 'Aadhaar Card document (Image or PDF) is required.';
 
     setErrors(newErrors);
@@ -212,6 +267,7 @@ export default function RegistrationForm({ onSuccess }) {
       studentClass: true,
       course: true,
       address: true,
+      photo: true,
       file: true
     });
 
@@ -233,6 +289,7 @@ export default function RegistrationForm({ onSuccess }) {
       payload.append('course', formData.course.trim());
       payload.append('address', formData.address.trim());
       payload.append('aadhar_file', file);
+      payload.append('photo_file', photo);
 
       const response = await fetch('/api/submit', {
         method: 'POST',
@@ -255,6 +312,9 @@ export default function RegistrationForm({ onSuccess }) {
         course: formData.course.trim(),
         address: formData.address.trim(),
         fileName: file.name,
+        photoName: photo.name,
+        photoUrl: data.photoUrl || photoPreview,
+        remotePhotoUrl: data.photoUrl,
         timestamp: data.timestamp
       };
 
@@ -282,6 +342,7 @@ export default function RegistrationForm({ onSuccess }) {
       address: ''
     });
     handleRemoveFile();
+    handleRemovePhoto();
     setErrors({});
     setTouched({});
     setApiError(null);
@@ -291,20 +352,47 @@ export default function RegistrationForm({ onSuccess }) {
   const handleShare = async () => {
     if (!submittedData) return;
     
-    const textToShare = `*Registration Successful!*\n\n*Name:* ${submittedData.name}\n*Ref ID:* ${submittedData.referenceId}\n*Class:* ${submittedData.studentClass}\n*Course:* ${submittedData.course}`;
-    
-    if (navigator.share) {
+    const textToShare = buildCongratulatoryMessage(submittedData);
+    const photoUrl = submittedData.remotePhotoUrl || submittedData.photoUrl;
+
+    let fileShared = false;
+    if (photoUrl && navigator.share && navigator.canShare) {
       try {
-        await navigator.share({
-          title: 'Student Registration Details',
-          text: textToShare,
+        const response = await fetch(photoUrl);
+        const blob = await response.blob();
+        const cleanName = (submittedData.name || 'student').replace(/[^a-zA-Z0-9]/g, '_');
+        const fileToShare = new File([blob], `${cleanName}_photo.jpg`, {
+          type: blob.type || 'image/jpeg'
         });
-      } catch (err) {
-        console.error('Error sharing', err);
+
+        if (navigator.canShare({ files: [fileToShare] })) {
+          await navigator.share({
+            title: `Admission Confirmed - ${submittedData.name}`,
+            text: textToShare,
+            files: [fileToShare]
+          });
+          fileShared = true;
+        }
+      } catch (e) {
+        console.warn('File share attempt failed:', e);
       }
-    } else {
-      // Fallback to WhatsApp
-      window.open(`https://wa.me/?text=${encodeURIComponent(textToShare)}`, '_blank');
+    }
+
+    if (!fileShared) {
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: `Admission Confirmed - ${submittedData.name}`,
+            text: textToShare
+          });
+        } catch (err) {
+          if (err.name !== 'AbortError') {
+            window.open(`https://wa.me/?text=${encodeURIComponent(textToShare)}`, '_blank');
+          }
+        }
+      } else {
+        window.open(`https://wa.me/?text=${encodeURIComponent(textToShare)}`, '_blank');
+      }
     }
   };
 
@@ -316,10 +404,21 @@ export default function RegistrationForm({ onSuccess }) {
       <div className="rf-container">
         <div className="rf-confirmation">
           <div className="rf-success-badge">✓</div>
-          <h2 className="rf-confirm-title">Registration Submitted!</h2>
+          <h2 className="rf-confirm-title">🎉 Heartiest Congratulations, {submittedData.name}! 🎓</h2>
           <p className="rf-confirm-desc">
-            Your application and Aadhaar document have been securely uploaded.
+            Your admission registration for <strong>{submittedData.course}</strong> has been successfully submitted and verified.
           </p>
+
+          {submittedData.photoUrl && (
+            <div className="rf-confirm-photo-box">
+              <img
+                src={submittedData.photoUrl}
+                alt="Student Passport Photo"
+                className="rf-confirm-student-avatar"
+              />
+              <div className="rf-confirm-photo-label">Student Photo</div>
+            </div>
+          )}
 
           <div className="rf-ref-box">
             <div className="rf-ref-row">
@@ -355,7 +454,11 @@ export default function RegistrationForm({ onSuccess }) {
               <span className="rf-ref-val">{submittedData.course}</span>
             </div>
             <div className="rf-ref-row">
-              <span className="rf-ref-label">Document</span>
+              <span className="rf-ref-label">Student Photo</span>
+              <span className="rf-ref-val">{submittedData.photoName || 'Uploaded'}</span>
+            </div>
+            <div className="rf-ref-row">
+              <span className="rf-ref-label">Aadhaar Document</span>
               <span className="rf-ref-val">{submittedData.fileName}</span>
             </div>
           </div>
@@ -554,86 +657,160 @@ export default function RegistrationForm({ onSuccess }) {
           )}
         </div>
 
-        {/* Aadhaar Card Upload */}
-        <div className="rf-group">
-          <div className="rf-label">
-            <span>Aadhar Card Upload <span className="rf-req">*</span></span>
-            <span className="rf-hint">PDF or Image (Max 5MB)</span>
-          </div>
+        {/* Document & Photo Uploads (2-column responsive grid) */}
+        <div className="rf-grid">
+          {/* 1. Student Passport Photo */}
+          <div className="rf-group">
+            <div className="rf-label">
+              <span>Student Photo <span className="rf-req">*</span></span>
+              <span className="rf-hint">Passport Size (Max 5MB)</span>
+            </div>
 
-          <input
-            type="file"
-            id="aadhar_file"
-            ref={fileInputRef}
-            accept="image/*,application/pdf"
-            onChange={(e) => {
-              if (e.target.files && e.target.files[0]) {
-                handleFileChange(e.target.files[0]);
-              }
-            }}
-            style={{ display: 'none' }}
-            disabled={loading}
-          />
-
-          {!file ? (
-            <div
-              className={`rf-upload-dropzone ${errors.file && touched.file ? 'rf-has-error' : ''}`}
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                  handleFileChange(e.dataTransfer.files[0]);
+            <input
+              type="file"
+              id="student_photo"
+              ref={photoInputRef}
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(e) => {
+                if (e.target.files && e.target.files[0]) {
+                  handlePhotoChange(e.target.files[0]);
                 }
               }}
-            >
-              <div className="rf-upload-title">Click to upload or drag & drop</div>
-              <div className="rf-upload-desc">Accepted: JPG, PNG, WebP, or PDF (Max 5MB)</div>
-            </div>
-          ) : (
-            <div className="rf-preview-card">
-              {/* Show Image Preview if Image */}
-              {filePreview ? (
-                <div className="rf-img-thumb-container">
-                  <img src={filePreview} alt="Aadhaar Preview" className="rf-img-thumb" />
-                </div>
-              ) : (
-                <div className="rf-file-icon">📄</div>
-              )}
+              style={{ display: 'none' }}
+              disabled={loading}
+            />
 
-              <div className="rf-preview-info">
-                <div className="rf-preview-name" title={file.name}>
-                  {file.name}
-                </div>
-                <div className="rf-preview-size">
-                  {(file.size / (1024 * 1024)).toFixed(2)} MB • {file.type.split('/')[1]?.toUpperCase() || 'FILE'}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="rf-btn-remove"
-                onClick={handleRemoveFile}
-                disabled={loading}
-                title="Remove file"
+            {!photo ? (
+              <div
+                className={`rf-upload-dropzone ${errors.photo && touched.photo ? 'rf-has-error' : ''}`}
+                onClick={() => photoInputRef.current?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    handlePhotoChange(e.dataTransfer.files[0]);
+                  }
+                }}
               >
-                ✕
-              </button>
-            </div>
-          )}
+                <div style={{ fontSize: '1.8rem', marginBottom: 6 }}>📷</div>
+                <div className="rf-upload-title">Upload Student Photo</div>
+                <div className="rf-upload-desc">Passport format (JPG, PNG, WebP)</div>
+              </div>
+            ) : (
+              <div className="rf-preview-card">
+                <div className="rf-img-thumb-container rf-student-thumb">
+                  <img src={photoPreview} alt="Student Photo" className="rf-img-thumb" />
+                </div>
 
-          {errors.file && touched.file && <div className="rf-error-msg">{errors.file}</div>}
+                <div className="rf-preview-info">
+                  <div className="rf-preview-name" title={photo.name}>
+                    {photo.name}
+                  </div>
+                  <div className="rf-preview-size">
+                    {(photo.size / (1024 * 1024)).toFixed(2)} MB • PHOTO
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="rf-btn-remove"
+                  onClick={handleRemovePhoto}
+                  disabled={loading}
+                  title="Remove photo"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {errors.photo && touched.photo && <div className="rf-error-msg">{errors.photo}</div>}
+          </div>
+
+          {/* 2. Aadhaar Card Upload */}
+          <div className="rf-group">
+            <div className="rf-label">
+              <span>Aadhar Card Upload <span className="rf-req">*</span></span>
+              <span className="rf-hint">PDF or Image (Max 5MB)</span>
+            </div>
+
+            <input
+              type="file"
+              id="aadhar_file"
+              ref={fileInputRef}
+              accept="image/*,application/pdf"
+              onChange={(e) => {
+                if (e.target.files && e.target.files[0]) {
+                  handleFileChange(e.target.files[0]);
+                }
+              }}
+              style={{ display: 'none' }}
+              disabled={loading}
+            />
+
+            {!file ? (
+              <div
+                className={`rf-upload-dropzone ${errors.file && touched.file ? 'rf-has-error' : ''}`}
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    handleFileChange(e.dataTransfer.files[0]);
+                  }
+                }}
+              >
+                <div style={{ fontSize: '1.8rem', marginBottom: 6 }}>📄</div>
+                <div className="rf-upload-title">Upload Aadhaar Document</div>
+                <div className="rf-upload-desc">Accepted: JPG, PNG, or PDF</div>
+              </div>
+            ) : (
+              <div className="rf-preview-card">
+                {filePreview ? (
+                  <div className="rf-img-thumb-container">
+                    <img src={filePreview} alt="Aadhaar Preview" className="rf-img-thumb" />
+                  </div>
+                ) : (
+                  <div className="rf-file-icon">📄</div>
+                )}
+
+                <div className="rf-preview-info">
+                  <div className="rf-preview-name" title={file.name}>
+                    {file.name}
+                  </div>
+                  <div className="rf-preview-size">
+                    {(file.size / (1024 * 1024)).toFixed(2)} MB • {file.type.split('/')[1]?.toUpperCase() || 'FILE'}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="rf-btn-remove"
+                  onClick={handleRemoveFile}
+                  disabled={loading}
+                  title="Remove file"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {errors.file && touched.file && <div className="rf-error-msg">{errors.file}</div>}
+          </div>
         </div>
 
         {/* Submit Button with Spinner & Disabled State while uploading */}
         <button 
           type="submit" 
           className="rf-btn-submit" 
-          disabled={loading || !file}
+          disabled={loading || !file || !photo}
         >
           {loading ? (
             <>

@@ -16,20 +16,20 @@ function getSupabaseClient() {
 // In-memory fallback storage for local demo testing when Supabase keys are not yet configured
 global.__MOCK_SUBMISSIONS__ = global.__MOCK_SUBMISSIONS__ || [];
 
-// Helper to parse multipart/form-data using busboy
+// Helper to parse multipart/form-data using busboy with multi-file support
 function parseMultipartForm(req) {
   return new Promise((resolve, reject) => {
     const busboy = Busboy({
       headers: req.headers,
       limits: {
-        fileSize: 5 * 1024 * 1024, // 5MB maximum
-        files: 1,
-        fields: 15
+        fileSize: 5 * 1024 * 1024, // 5MB maximum per file
+        files: 5,
+        fields: 20
       }
     });
 
     const fields = {};
-    let fileData = null;
+    const files = {};
     let fileLimitExceeded = false;
 
     busboy.on('field', (name, val) => {
@@ -38,21 +38,28 @@ function parseMultipartForm(req) {
 
     busboy.on('file', (name, fileStream, info) => {
       const { filename, encoding, mimeType } = info;
+      if (!filename) {
+        fileStream.resume();
+        return;
+      }
+
       const chunks = [];
+      let currentFileExceeded = false;
 
       fileStream.on('data', (chunk) => {
         chunks.push(chunk);
       });
 
       fileStream.on('limit', () => {
+        currentFileExceeded = true;
         fileLimitExceeded = true;
       });
 
       fileStream.on('end', () => {
-        if (!fileLimitExceeded) {
-          fileData = {
+        if (!currentFileExceeded) {
+          files[name] = {
             fieldname: name,
-            filename: filename || 'aadhar_document',
+            filename: filename,
             mimeType: mimeType || 'application/octet-stream',
             buffer: Buffer.concat(chunks),
             size: Buffer.concat(chunks).length
@@ -69,7 +76,8 @@ function parseMultipartForm(req) {
       if (fileLimitExceeded) {
         reject(new Error('File size exceeds the 5MB limit.'));
       } else {
-        resolve({ fields, file: fileData });
+        const primaryFile = files.aadhar_file || files[Object.keys(files)[0]] || null;
+        resolve({ fields, files, file: primaryFile });
       }
     });
 
@@ -115,7 +123,7 @@ export default async function handler(req, res) {
     }
 
     // 2. Parse Multipart Form
-    const { fields, file } = await parseMultipartForm(req);
+    const { fields, files, file } = await parseMultipartForm(req);
 
     const fullName = (fields.name || fields.full_name || '').trim();
     const phone = (fields.mobile_number || fields.phone || '').trim().replace(/\D/g, '');
@@ -126,6 +134,9 @@ export default async function handler(req, res) {
     const fatherName = (fields.father_name || '').trim();
     const email = (fields.email || '').trim().toLowerCase();
     const aadharNumber = (fields.aadhar_number || '').trim().replace(/\s|-/g, '');
+
+    const aadharFile = files.aadhar_file || file;
+    const photoFile = files.photo_file || files.student_photo || files.photo || null;
 
     // 3. Server-side Validation
     const errors = [];
@@ -157,18 +168,34 @@ export default async function handler(req, res) {
       errors.push("Father's Name is required.");
     }
 
-    if (!file || !file.buffer || file.buffer.length === 0) {
+    // Aadhaar Document Validation
+    if (!aadharFile || !aadharFile.buffer || aadharFile.buffer.length === 0) {
       errors.push('Aadhaar card document file (image or PDF) is required.');
     } else {
-      const allowedMimeTypes = [
+      const allowedDocTypes = [
         'application/pdf',
         'image/jpeg',
         'image/jpg',
         'image/png',
         'image/webp'
       ];
-      if (!allowedMimeTypes.includes(file.mimeType.toLowerCase())) {
-        errors.push('Unsupported file format. Please upload an image (JPG, PNG, WebP) or PDF file.');
+      if (!allowedDocTypes.includes(aadharFile.mimeType.toLowerCase())) {
+        errors.push('Unsupported Aadhaar file format. Please upload an image (JPG, PNG, WebP) or PDF file.');
+      }
+    }
+
+    // Student Photo Validation
+    if (!photoFile || !photoFile.buffer || photoFile.buffer.length === 0) {
+      errors.push('Student passport-size photo is required.');
+    } else {
+      const allowedPhotoTypes = [
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/webp'
+      ];
+      if (!allowedPhotoTypes.includes(photoFile.mimeType.toLowerCase())) {
+        errors.push('Unsupported student photo format. Please upload an image file (JPG, PNG, or WebP).');
       }
     }
 
@@ -179,61 +206,113 @@ export default async function handler(req, res) {
       });
     }
 
-    // 4. Handle Storage & Database
+    // 4. Handle Storage & Database (Supabase Storage)
     const supabase = getSupabaseClient();
     const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'aadhar-documents';
-    const cleanFileName = file.filename.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const storagePath = `aadhar_${Date.now()}_${Math.random().toString(36).substring(2, 8)}_${cleanFileName}`;
-
-    let fileUrl = '';
+    
+    let aadharFileUrl = '';
+    let aadharStoragePath = '';
+    let photoFileUrl = '';
+    let photoStoragePath = '';
 
     if (supabase) {
-      // 4a. Upload to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      // 4a. Upload Aadhaar file to Supabase Storage
+      const cleanAadharName = aadharFile.filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+      aadharStoragePath = `aadhar_${Date.now()}_${Math.random().toString(36).substring(2, 8)}_${cleanAadharName}`;
+
+      const { error: aadharUploadError } = await supabase.storage
         .from(bucketName)
-        .upload(storagePath, file.buffer, {
-          contentType: file.mimeType,
+        .upload(aadharStoragePath, aadharFile.buffer, {
+          contentType: aadharFile.mimeType,
           upsert: false
         });
 
-      if (uploadError) {
-        console.error('Supabase Storage Upload Error:', uploadError);
+      if (aadharUploadError) {
+        console.error('Supabase Aadhaar Storage Upload Error:', aadharUploadError);
         return res.status(500).json({
           success: false,
-          error: `Storage upload failed: ${uploadError.message}`
+          error: `Aadhaar storage upload failed: ${aadharUploadError.message}`
         });
       }
 
-      // Get public URL
-      const { data: urlData } = supabase.storage
+      // Get Aadhaar public URL
+      const { data: aadharUrlData } = supabase.storage
         .from(bucketName)
-        .getPublicUrl(storagePath);
+        .getPublicUrl(aadharStoragePath);
+      aadharFileUrl = aadharUrlData?.publicUrl || '';
 
-      fileUrl = urlData?.publicUrl || '';
+      // 4b. Upload Student Photo to Supabase Storage
+      if (photoFile) {
+        const cleanPhotoName = photoFile.filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+        photoStoragePath = `photo_${Date.now()}_${Math.random().toString(36).substring(2, 8)}_${cleanPhotoName}`;
 
-      // 4b. Insert Record into Supabase Database
-      const { data: insertData, error: insertError } = await supabase
+        const { error: photoUploadError } = await supabase.storage
+          .from(bucketName)
+          .upload(photoStoragePath, photoFile.buffer, {
+            contentType: photoFile.mimeType,
+            upsert: false
+          });
+
+        if (photoUploadError) {
+          console.error('Supabase Photo Storage Upload Error:', photoUploadError);
+          return res.status(500).json({
+            success: false,
+            error: `Student photo upload failed: ${photoUploadError.message}`
+          });
+        }
+
+        const { data: photoUrlData } = supabase.storage
+          .from(bucketName)
+          .getPublicUrl(photoStoragePath);
+        photoFileUrl = photoUrlData?.publicUrl || '';
+      }
+    }
+
+    if (supabase) {
+      // 4c. Insert Record into Supabase Database
+      const recordPayload = {
+        full_name: fullName,
+        phone: phone,
+        alternate_mobile: alternateMobile || null,
+        address: address,
+        class: studentClass,
+        course: course,
+        father_name: fatherName,
+        email: email || null,
+        aadhar_number: aadharNumber || null,
+        aadhar_file_url: aadharFileUrl,
+        aadhar_file_path: aadharStoragePath,
+        photo_url: photoFileUrl || null,
+        photo_file_path: photoStoragePath || null,
+        file_name: aadharFile.filename,
+        file_size: aadharFile.size,
+        file_type: aadharFile.mimeType
+      };
+
+      let { data: insertData, error: insertError } = await supabase
         .from('submissions')
-        .insert([
-          {
-            full_name: fullName,
-            phone: phone,
-            alternate_mobile: alternateMobile || null,
-            address: address,
-            class: studentClass,
-            course: course,
-            father_name: fatherName,
-            email: email || null,
-            aadhar_number: aadharNumber || null,
-            aadhar_file_url: fileUrl,
-            aadhar_file_path: storagePath,
-            file_name: file.filename,
-            file_size: file.size,
-            file_type: file.mimeType
-          }
-        ])
+        .insert([recordPayload])
         .select('id, full_name, phone, created_at')
         .single();
+
+      // Graceful fallback: If Supabase schema cache doesn't have photo columns yet, retry without photo columns
+      if (insertError && (insertError.message.includes('photo_file_path') || insertError.message.includes('photo_url'))) {
+        console.warn('⚠️ Supabase submissions table missing photo columns. Please run migration in Supabase SQL editor:');
+        console.warn('ALTER TABLE public.submissions ADD COLUMN IF NOT EXISTS photo_url TEXT;');
+        console.warn('ALTER TABLE public.submissions ADD COLUMN IF NOT EXISTS photo_file_path TEXT;');
+
+        delete recordPayload.photo_url;
+        delete recordPayload.photo_file_path;
+
+        const retry = await supabase
+          .from('submissions')
+          .insert([recordPayload])
+          .select('id, full_name, phone, created_at')
+          .single();
+
+        insertData = retry.data;
+        insertError = retry.error;
+      }
 
       if (insertError) {
         console.error('Supabase DB Insert Error:', insertError);
@@ -245,8 +324,9 @@ export default async function handler(req, res) {
 
       return res.status(201).json({
         success: true,
-        message: 'Registration and Aadhaar document submitted successfully!',
+        message: 'Registration and documents submitted successfully!',
         submissionId: insertData.id,
+        photoUrl: photoFileUrl,
         timestamp: insertData.created_at
       });
     } else {
@@ -254,6 +334,15 @@ export default async function handler(req, res) {
       console.warn('⚡ Running in Mock Demo Mode: Supabase credentials not configured in user-form/.env.');
       
       const mockId = 'REG-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+      
+      const photoDataUrl = photoFile && photoFile.mimeType.startsWith('image/')
+        ? `data:${photoFile.mimeType};base64,${photoFile.buffer.toString('base64')}`
+        : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80';
+
+      const aadharDataUrl = aadharFile.mimeType.startsWith('image/')
+        ? `data:${aadharFile.mimeType};base64,${aadharFile.buffer.toString('base64')}`
+        : 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=800&q=80';
+
       const mockRecord = {
         id: mockId,
         full_name: fullName,
@@ -265,13 +354,13 @@ export default async function handler(req, res) {
         father_name: fatherName,
         email: email || '',
         aadhar_number: aadharNumber || '',
-        aadhar_file_url: file.mimeType.startsWith('image/')
-          ? `data:${file.mimeType};base64,${file.buffer.toString('base64')}`
-          : 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=800&q=80',
-        aadhar_file_path: storagePath,
-        file_name: file.filename,
-        file_size: file.size,
-        file_type: file.mimeType,
+        aadhar_file_url: aadharDataUrl,
+        aadhar_file_path: aadharStoragePath,
+        photo_url: photoDataUrl,
+        photo_file_path: photoStoragePath,
+        file_name: aadharFile.filename,
+        file_size: aadharFile.size,
+        file_type: aadharFile.mimeType,
         created_at: new Date().toISOString()
       };
 
@@ -281,6 +370,7 @@ export default async function handler(req, res) {
         success: true,
         message: 'Registration submitted successfully! (Demo Mode - Supabase integration ready)',
         submissionId: mockId,
+        photoUrl: photoDataUrl,
         timestamp: mockRecord.created_at,
         isDemo: true
       });
