@@ -254,6 +254,83 @@ export default function RegistrationForm({ onSuccess }) {
     return Object.keys(newErrors).length === 0;
   };
 
+  // Client-side image compressor using HTML5 Canvas
+  // Compresses camera/phone photos to ~100-300KB before upload to eliminate Vercel 4.5MB payload errors
+  const compressImageFile = async (inputFile, { maxWidth = 1200, maxHeight = 1200, quality = 0.82 } = {}) => {
+    if (!inputFile) return inputFile;
+    // Keep PDFs unmodified
+    if (inputFile.type === 'application/pdf' || inputFile.name.toLowerCase().endsWith('.pdf')) {
+      return inputFile;
+    }
+    // Only compress standard images
+    const isImage = inputFile.type.startsWith('image/') || /\.(jpg|jpeg|png|webp)$/i.test(inputFile.name);
+    if (!isImage) {
+      return inputFile;
+    }
+
+    return new Promise((resolve) => {
+      try {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(inputFile);
+
+        img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          let { width, height } = img;
+
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+
+          if (!ctx) {
+            return resolve(inputFile);
+          }
+
+          // White background fallback for transparent PNGs converted to JPEG
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              if (!blob || blob.size >= inputFile.size) {
+                return resolve(inputFile);
+              }
+              const cleanName = inputFile.name.replace(/\.[^/.]+$/, '') + '.jpg';
+              const compressedFile = new File([blob], cleanName, {
+                type: 'image/jpeg',
+                lastModified: Date.now()
+              });
+              resolve(compressedFile);
+            },
+            'image/jpeg',
+            quality
+          );
+        };
+
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          resolve(inputFile);
+        };
+
+        img.src = objectUrl;
+      } catch (e) {
+        console.warn('Canvas compression error fallback:', e);
+        resolve(inputFile);
+      }
+    });
+  };
+
   // Submit handler using fetch with FormData (multipart) to /api/submit
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -276,8 +353,16 @@ export default function RegistrationForm({ onSuccess }) {
     }
 
     setLoading(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45-second network timeout
 
     try {
+      // 1. Automatically compress images on the client to guarantee fast, reliable upload
+      const [compressedAadhar, compressedPhoto] = await Promise.all([
+        compressImageFile(file, { maxWidth: 1600, maxHeight: 1600, quality: 0.85 }),
+        compressImageFile(photo, { maxWidth: 1000, maxHeight: 1000, quality: 0.82 })
+      ]);
+
       const payload = new FormData();
       payload.append('name', formData.name.trim());
       payload.append('father_name', formData.fatherName.trim());
@@ -288,15 +373,39 @@ export default function RegistrationForm({ onSuccess }) {
       payload.append('class', formData.studentClass.trim());
       payload.append('course', formData.course.trim());
       payload.append('address', formData.address.trim());
-      payload.append('aadhar_file', file);
-      payload.append('photo_file', photo);
+      payload.append('aadhar_file', compressedAadhar || file);
+      payload.append('photo_file', compressedPhoto || photo);
 
       const response = await fetch('/api/submit', {
         method: 'POST',
-        body: payload
+        body: payload,
+        signal: controller.signal
       });
 
-      const data = await response.json();
+      clearTimeout(timeoutId);
+
+      // 2. Safe JSON parsing with fallback for HTML/Text error responses
+      let data = {};
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const textResp = await response.text();
+        if (!response.ok) {
+          if (response.status === 413) {
+            throw new Error('Upload payload exceeds server limit. Please try with smaller documents.');
+          } else if (response.status === 504 || response.status === 502) {
+            throw new Error('Server connection timed out. Please verify your connection and try again.');
+          } else {
+            throw new Error(`Server returned status ${response.status}. Please try again later.`);
+          }
+        }
+        try {
+          data = JSON.parse(textResp);
+        } catch {
+          throw new Error('Unexpected server response. Please try again.');
+        }
+      }
 
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Submission failed. Please verify your details.');
@@ -324,8 +433,13 @@ export default function RegistrationForm({ onSuccess }) {
         onSuccess(resultPayload);
       }
     } catch (err) {
+      clearTimeout(timeoutId);
       console.error('Registration submission error:', err);
-      setApiError(err.message || 'An unexpected error occurred. Please try again.');
+      if (err.name === 'AbortError') {
+        setApiError('Request timed out. Please check your internet connection and try again.');
+      } else {
+        setApiError(err.message || 'An unexpected error occurred. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 import Busboy from 'busboy';
+import { getCloudinary, uploadBufferToCloudinary } from './_lib/cloudinary.js';
+
+// Vercel Serverless Function Configuration
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
 
 // Initialize Supabase Client
 function getSupabaseClient() {
@@ -10,80 +18,156 @@ function getSupabaseClient() {
     return null; // Signals demo / mock mode
   }
 
-  return createClient(supabaseUrl, supabaseKey);
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  });
 }
 
 // In-memory fallback storage for local demo testing when Supabase keys are not yet configured
 global.__MOCK_SUBMISSIONS__ = global.__MOCK_SUBMISSIONS__ || [];
 
-// Helper to parse multipart/form-data using busboy with multi-file support
+// Helper to normalize and infer MIME type & extension
+function normalizeFileInfo(file) {
+  if (!file || !file.filename) return null;
+
+  const extMatch = file.filename.toLowerCase().match(/\.([a-z0-9]+)$/);
+  const ext = extMatch ? extMatch[1] : '';
+  let mimeType = (file.mimeType || '').toLowerCase();
+
+  // Canonical mapping for supported file types
+  const extMap = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    webp: 'image/webp',
+    pdf: 'application/pdf'
+  };
+
+  // If MIME type is generic or missing, infer from extension
+  if (!mimeType || mimeType === 'application/octet-stream' || mimeType === 'binary/octet-stream') {
+    if (extMap[ext]) {
+      mimeType = extMap[ext];
+    }
+  } else if (mimeType === 'image/pjpeg' || mimeType === 'image/jpg') {
+    mimeType = 'image/jpeg';
+  } else if (mimeType === 'image/x-png') {
+    mimeType = 'image/png';
+  } else if (mimeType === 'application/x-pdf') {
+    mimeType = 'application/pdf';
+  }
+
+  return {
+    ...file,
+    normalizedMime: mimeType || 'application/octet-stream',
+    extension: ext
+  };
+}
+
+// Helper to parse multipart/form-data using busboy with multi-file Promise tracking
 function parseMultipartForm(req) {
   return new Promise((resolve, reject) => {
-    const busboy = Busboy({
-      headers: req.headers,
-      limits: {
-        fileSize: 5 * 1024 * 1024, // 5MB maximum per file
-        files: 5,
-        fields: 20
-      }
-    });
+    let busboy;
+    try {
+      busboy = Busboy({
+        headers: req.headers,
+        limits: {
+          fileSize: 10 * 1024 * 1024, // 10MB maximum per file
+          files: 5,
+          fields: 30
+        }
+      });
+    } catch (initErr) {
+      return reject(initErr);
+    }
 
     const fields = {};
     const files = {};
-    let fileLimitExceeded = false;
+    const filePromises = [];
+    let isSettled = false;
+
+    const fail = (err) => {
+      if (!isSettled) {
+        isSettled = true;
+        reject(err);
+      }
+    };
 
     busboy.on('field', (name, val) => {
       fields[name] = val;
     });
 
     busboy.on('file', (name, fileStream, info) => {
-      const { filename, encoding, mimeType } = info;
+      const filename = info?.filename || '';
+      const mimeType = info?.mimeType || info?.mimetype || 'application/octet-stream';
+
       if (!filename) {
         fileStream.resume();
         return;
       }
 
-      const chunks = [];
-      let currentFileExceeded = false;
+      const filePromise = new Promise((resFile, rejFile) => {
+        const chunks = [];
+        let fileLimitExceeded = false;
 
-      fileStream.on('data', (chunk) => {
-        chunks.push(chunk);
-      });
+        fileStream.on('data', (chunk) => {
+          chunks.push(chunk);
+        });
 
-      fileStream.on('limit', () => {
-        currentFileExceeded = true;
-        fileLimitExceeded = true;
-      });
+        fileStream.on('limit', () => {
+          fileLimitExceeded = true;
+        });
 
-      fileStream.on('end', () => {
-        if (!currentFileExceeded) {
+        fileStream.on('error', (streamErr) => {
+          rejFile(streamErr);
+        });
+
+        fileStream.on('end', () => {
+          if (fileLimitExceeded) {
+            return rejFile(new Error(`File "${filename}" exceeds the maximum allowed size.`));
+          }
+          const buffer = Buffer.concat(chunks);
           files[name] = {
             fieldname: name,
             filename: filename,
-            mimeType: mimeType || 'application/octet-stream',
-            buffer: Buffer.concat(chunks),
-            size: Buffer.concat(chunks).length
+            mimeType: mimeType,
+            buffer: buffer,
+            size: buffer.length
           };
-        }
+          resFile();
+        });
       });
+
+      filePromises.push(filePromise);
     });
 
     busboy.on('error', (err) => {
-      reject(err);
+      fail(err);
     });
 
-    busboy.on('finish', () => {
-      if (fileLimitExceeded) {
-        reject(new Error('File size exceeds the 5MB limit.'));
-      } else {
-        const primaryFile = files.aadhar_file || files[Object.keys(files)[0]] || null;
-        resolve({ fields, files, file: primaryFile });
+    // In Busboy 1.x, 'close' fires once all parts have completed parsing
+    busboy.on('close', async () => {
+      try {
+        await Promise.all(filePromises);
+        if (!isSettled) {
+          isSettled = true;
+          const primaryFile = files.aadhar_file || files[Object.keys(files)[0]] || null;
+          resolve({ fields, files, file: primaryFile });
+        }
+      } catch (err) {
+        fail(err);
       }
     });
 
-    // Pipe the request stream into busboy
-    if (req.rawBody) {
+    // Pipe the request stream into busboy (handling buffered body from Vercel / serverless runtime)
+    if (Buffer.isBuffer(req.rawBody)) {
       busboy.end(req.rawBody);
+    } else if (Buffer.isBuffer(req.body)) {
+      busboy.end(req.body);
+    } else if (req.rawBody && typeof req.rawBody === 'string') {
+      busboy.end(Buffer.from(req.rawBody));
     } else {
       req.pipe(busboy);
     }
@@ -122,7 +206,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // 2. Parse Multipart Form
+    // 2. Parse Multipart Form with async multi-stream support
     const { fields, files, file } = await parseMultipartForm(req);
 
     const fullName = (fields.name || fields.full_name || '').trim();
@@ -168,33 +252,34 @@ export default async function handler(req, res) {
       errors.push("Father's Name is required.");
     }
 
+    // Normalized file checks
+    const normalizedAadhar = normalizeFileInfo(aadharFile);
+    const normalizedPhoto = normalizeFileInfo(photoFile);
+
+    const allowedDocExts = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
+    const allowedDocMimes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+
+    const allowedPhotoExts = ['jpg', 'jpeg', 'png', 'webp'];
+    const allowedPhotoMimes = ['image/jpeg', 'image/png', 'image/webp'];
+
     // Aadhaar Document Validation
-    if (!aadharFile || !aadharFile.buffer || aadharFile.buffer.length === 0) {
+    if (!normalizedAadhar || !normalizedAadhar.buffer || normalizedAadhar.buffer.length === 0) {
       errors.push('Aadhaar card document file (image or PDF) is required.');
     } else {
-      const allowedDocTypes = [
-        'application/pdf',
-        'image/jpeg',
-        'image/jpg',
-        'image/png',
-        'image/webp'
-      ];
-      if (!allowedDocTypes.includes(aadharFile.mimeType.toLowerCase())) {
+      const isExtValid = allowedDocExts.includes(normalizedAadhar.extension);
+      const isMimeValid = allowedDocMimes.includes(normalizedAadhar.normalizedMime);
+      if (!isExtValid && !isMimeValid) {
         errors.push('Unsupported Aadhaar file format. Please upload an image (JPG, PNG, WebP) or PDF file.');
       }
     }
 
     // Student Photo Validation
-    if (!photoFile || !photoFile.buffer || photoFile.buffer.length === 0) {
+    if (!normalizedPhoto || !normalizedPhoto.buffer || normalizedPhoto.buffer.length === 0) {
       errors.push('Student passport-size photo is required.');
     } else {
-      const allowedPhotoTypes = [
-        'image/jpeg',
-        'image/jpg',
-        'image/png',
-        'image/webp'
-      ];
-      if (!allowedPhotoTypes.includes(photoFile.mimeType.toLowerCase())) {
+      const isExtValid = allowedPhotoExts.includes(normalizedPhoto.extension);
+      const isMimeValid = allowedPhotoMimes.includes(normalizedPhoto.normalizedMime);
+      if (!isExtValid && !isMimeValid) {
         errors.push('Unsupported student photo format. Please upload an image file (JPG, PNG, or WebP).');
       }
     }
@@ -206,50 +291,76 @@ export default async function handler(req, res) {
       });
     }
 
-    // 4. Handle Storage & Database (Supabase Storage)
+    // 4. Handle Storage & Database
     const supabase = getSupabaseClient();
     const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'aadhar-documents';
+    const cloudinaryClient = getCloudinary();
     
     let aadharFileUrl = '';
     let aadharStoragePath = '';
     let photoFileUrl = '';
     let photoStoragePath = '';
 
-    if (supabase) {
-      // 4a. Upload Aadhaar file to Supabase Storage
-      const cleanAadharName = aadharFile.filename.replace(/[^a-zA-Z0-9.-]/g, '_');
-      aadharStoragePath = `aadhar_${Date.now()}_${Math.random().toString(36).substring(2, 8)}_${cleanAadharName}`;
-
-      const { error: aadharUploadError } = await supabase.storage
-        .from(bucketName)
-        .upload(aadharStoragePath, aadharFile.buffer, {
-          contentType: aadharFile.mimeType,
-          upsert: false
+    // If Cloudinary is configured, prefer Cloudinary for reliable media hosting
+    if (cloudinaryClient) {
+      try {
+        const aadharUpload = await uploadBufferToCloudinary(normalizedAadhar.buffer, {
+          folder: 'student_registrations/aadhar',
+          resource_type: normalizedAadhar.normalizedMime === 'application/pdf' ? 'raw' : 'image'
         });
+        aadharFileUrl = aadharUpload.secure_url;
+        aadharStoragePath = aadharUpload.public_id;
 
-      if (aadharUploadError) {
-        console.error('Supabase Aadhaar Storage Upload Error:', aadharUploadError);
-        return res.status(500).json({
-          success: false,
-          error: `Aadhaar storage upload failed: ${aadharUploadError.message}`
-        });
+        if (normalizedPhoto) {
+          const photoUpload = await uploadBufferToCloudinary(normalizedPhoto.buffer, {
+            folder: 'student_registrations/photos',
+            resource_type: 'image'
+          });
+          photoFileUrl = photoUpload.secure_url;
+          photoStoragePath = photoUpload.public_id;
+        }
+      } catch (cloudErr) {
+        console.warn('Cloudinary upload failed, falling back to Supabase:', cloudErr.message);
+      }
+    }
+
+    // Supabase Storage fallback or primary
+    if (supabase && (!aadharFileUrl || !photoFileUrl)) {
+      if (!aadharFileUrl) {
+        const cleanAadharExt = normalizedAadhar.extension ? `.${normalizedAadhar.extension}` : '';
+        const cleanAadharBase = normalizedAadhar.filename.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+        aadharStoragePath = `aadhar_${Date.now()}_${Math.random().toString(36).substring(2, 8)}_${cleanAadharBase}${cleanAadharExt}`;
+
+        const { error: aadharUploadError } = await supabase.storage
+          .from(bucketName)
+          .upload(aadharStoragePath, normalizedAadhar.buffer, {
+            contentType: normalizedAadhar.normalizedMime || 'application/octet-stream',
+            upsert: false
+          });
+
+        if (aadharUploadError) {
+          console.error('Supabase Aadhaar Storage Upload Error:', aadharUploadError);
+          return res.status(500).json({
+            success: false,
+            error: `Aadhaar storage upload failed: ${aadharUploadError.message}`
+          });
+        }
+
+        const { data: aadharUrlData } = supabase.storage
+          .from(bucketName)
+          .getPublicUrl(aadharStoragePath);
+        aadharFileUrl = aadharUrlData?.publicUrl || '';
       }
 
-      // Get Aadhaar public URL
-      const { data: aadharUrlData } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(aadharStoragePath);
-      aadharFileUrl = aadharUrlData?.publicUrl || '';
-
-      // 4b. Upload Student Photo to Supabase Storage
-      if (photoFile) {
-        const cleanPhotoName = photoFile.filename.replace(/[^a-zA-Z0-9.-]/g, '_');
-        photoStoragePath = `photo_${Date.now()}_${Math.random().toString(36).substring(2, 8)}_${cleanPhotoName}`;
+      if (normalizedPhoto && !photoFileUrl) {
+        const cleanPhotoExt = normalizedPhoto.extension ? `.${normalizedPhoto.extension}` : '.jpg';
+        const cleanPhotoBase = normalizedPhoto.filename.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+        photoStoragePath = `photo_${Date.now()}_${Math.random().toString(36).substring(2, 8)}_${cleanPhotoBase}${cleanPhotoExt}`;
 
         const { error: photoUploadError } = await supabase.storage
           .from(bucketName)
-          .upload(photoStoragePath, photoFile.buffer, {
-            contentType: photoFile.mimeType,
+          .upload(photoStoragePath, normalizedPhoto.buffer, {
+            contentType: normalizedPhoto.normalizedMime || 'image/jpeg',
             upsert: false
           });
 
@@ -284,9 +395,9 @@ export default async function handler(req, res) {
         aadhar_file_path: aadharStoragePath,
         photo_url: photoFileUrl || null,
         photo_file_path: photoStoragePath || null,
-        file_name: aadharFile.filename,
-        file_size: aadharFile.size,
-        file_type: aadharFile.mimeType
+        file_name: normalizedAadhar.filename,
+        file_size: normalizedAadhar.size,
+        file_type: normalizedAadhar.normalizedMime
       };
 
       let { data: insertData, error: insertError } = await supabase
@@ -297,9 +408,7 @@ export default async function handler(req, res) {
 
       // Graceful fallback: If Supabase schema cache doesn't have photo columns yet, retry without photo columns
       if (insertError && (insertError.message.includes('photo_file_path') || insertError.message.includes('photo_url'))) {
-        console.warn('⚠️ Supabase submissions table missing photo columns. Please run migration in Supabase SQL editor:');
-        console.warn('ALTER TABLE public.submissions ADD COLUMN IF NOT EXISTS photo_url TEXT;');
-        console.warn('ALTER TABLE public.submissions ADD COLUMN IF NOT EXISTS photo_file_path TEXT;');
+        console.warn('⚠️ Supabase submissions table missing photo columns. Retrying insert without photo columns...');
 
         delete recordPayload.photo_url;
         delete recordPayload.photo_file_path;
@@ -335,12 +444,12 @@ export default async function handler(req, res) {
       
       const mockId = 'REG-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
       
-      const photoDataUrl = photoFile && photoFile.mimeType.startsWith('image/')
-        ? `data:${photoFile.mimeType};base64,${photoFile.buffer.toString('base64')}`
+      const photoDataUrl = normalizedPhoto && normalizedPhoto.normalizedMime.startsWith('image/')
+        ? `data:${normalizedPhoto.normalizedMime};base64,${normalizedPhoto.buffer.toString('base64')}`
         : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80';
 
-      const aadharDataUrl = aadharFile.mimeType.startsWith('image/')
-        ? `data:${aadharFile.mimeType};base64,${aadharFile.buffer.toString('base64')}`
+      const aadharDataUrl = normalizedAadhar.normalizedMime.startsWith('image/')
+        ? `data:${normalizedAadhar.normalizedMime};base64,${normalizedAadhar.buffer.toString('base64')}`
         : 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=800&q=80';
 
       const mockRecord = {
@@ -358,9 +467,9 @@ export default async function handler(req, res) {
         aadhar_file_path: aadharStoragePath,
         photo_url: photoDataUrl,
         photo_file_path: photoStoragePath,
-        file_name: aadharFile.filename,
-        file_size: aadharFile.size,
-        file_type: aadharFile.mimeType,
+        file_name: normalizedAadhar.filename,
+        file_size: normalizedAadhar.size,
+        file_type: normalizedAadhar.normalizedMime,
         created_at: new Date().toISOString()
       };
 
@@ -383,3 +492,4 @@ export default async function handler(req, res) {
     });
   }
 }
+
