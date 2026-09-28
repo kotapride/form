@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Camera, Image as ImageIcon } from 'lucide-react';
 import './RegistrationForm.css';
 import SuccessCard, { buildCongratulatoryMessage } from './SuccessCard';
+import CameraModal from './CameraModal';
 
 const CLASS_OPTIONS = [
   '1st Class',
@@ -45,6 +47,7 @@ export default function RegistrationForm({ onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState(null);
   const [submittedData, setSubmittedData] = useState(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
 
   const fileInputRef = useRef(null);
   const photoInputRef = useRef(null);
@@ -167,15 +170,21 @@ export default function RegistrationForm({ onSuccess }) {
     setPhotoPreview(url);
   };
 
+  const handleOpenCamera = () => {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      setIsCameraOpen(true);
+    } else if (photoInputRef.current) {
+      photoInputRef.current.click();
+    }
+  };
+
   const handleRemovePhoto = () => {
     if (photoPreview && photoPreview.startsWith('blob:')) {
       URL.revokeObjectURL(photoPreview);
     }
     setPhoto(null);
     setPhotoPreview(null);
-    if (photoInputRef.current) {
-      photoInputRef.current.value = '';
-    }
+    if (photoInputRef.current) photoInputRef.current.value = '';
   };
 
   // Handle file selection and validation (max 5MB, image/* or pdf)
@@ -729,7 +738,7 @@ export default function RegistrationForm({ onSuccess }) {
               type="file"
               id="student_photo"
               ref={photoInputRef}
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/*"
               onChange={(e) => {
                 if (e.target.files && e.target.files[0]) {
                   handlePhotoChange(e.target.files[0]);
@@ -757,7 +766,22 @@ export default function RegistrationForm({ onSuccess }) {
               >
                 <div style={{ fontSize: '1.8rem', marginBottom: 6 }}>📷</div>
                 <div className="rf-upload-title">Upload Student Photo</div>
-                <div className="rf-upload-desc">Passport format (JPG, PNG, WebP)</div>
+                <div className="rf-upload-desc">Camera or Gallery (JPG, PNG, WebP)</div>
+                <div className="rf-upload-pills">
+                  <span
+                    className="rf-upload-pill"
+                    onClick={(e) => {
+                      if (!('ontouchstart' in window) && navigator.mediaDevices?.getUserMedia) {
+                        e.stopPropagation();
+                        handleOpenCamera();
+                      }
+                    }}
+                    title="Take photo using camera"
+                  >
+                    📸 Camera
+                  </span>
+                  <span className="rf-upload-pill">🖼️ Gallery</span>
+                </div>
               </div>
             ) : (
               <div className="rf-preview-card">
@@ -829,6 +853,10 @@ export default function RegistrationForm({ onSuccess }) {
                 <div style={{ fontSize: '1.8rem', marginBottom: 6 }}>📄</div>
                 <div className="rf-upload-title">Upload Aadhaar Document</div>
                 <div className="rf-upload-desc">Accepted: JPG, PNG, or PDF</div>
+                <div className="rf-upload-pills">
+                  <span className="rf-upload-pill">📸 Camera</span>
+                  <span className="rf-upload-pill">📁 Files / PDF</span>
+                </div>
               </div>
             ) : (
               <div className="rf-preview-card">
@@ -881,6 +909,20 @@ export default function RegistrationForm({ onSuccess }) {
           )}
         </button>
       </form>
+
+      {/* Live Camera Viewfinder Modal */}
+      <CameraModal
+        isOpen={isCameraOpen}
+        onClose={() => setIsCameraOpen(false)}
+        onCapture={(capturedFile) => {
+          handlePhotoChange(capturedFile);
+        }}
+        onFallbackToNativeCamera={() => {
+          if (photoInputRef.current) {
+            photoInputRef.current.click();
+          }
+        }}
+      />
     </div>
   );
 }

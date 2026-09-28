@@ -156,6 +156,42 @@
   color: var(--text-subtle);
 }
 
+/* Upload Pill Badges */
+.rf-upload-pills {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.rf-upload-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.rf-upload-dropzone:hover .rf-upload-pill {
+  border-color: #94a3b8;
+  color: #1e293b;
+  background: #fdfdfd;
+}
+
+.rf-upload-pill:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 /* Live Image & Document Preview */
 .rf-preview-card {
   display: flex;
