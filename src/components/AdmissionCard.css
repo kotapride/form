@@ -1,0 +1,828 @@
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&display=swap');
+
+/* ==========================================================================
+   Exact Replica: PrepMagic Official Admission Card 2026
+   ========================================================================== */
+
+.admission-card-outer {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto 28px auto;
+  position: relative;
+  background-color: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 14px 35px -5px rgba(15, 23, 42, 0.15), 0 0 0 1px rgba(226, 232, 240, 0.8);
+  overflow: hidden;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #0f172a;
+  text-align: left;
+}
+
+/* 1. Header Banner - Deep Royal Navy */
+.admission-card-header {
+  background: #091f48;
+  background-image: linear-gradient(135deg, #091f48 0%, #103778 50%, #081d42 100%);
+  padding: 20px 24px 18px 24px;
+  color: #ffffff;
+  position: relative;
+  border-radius: 20px 20px 0 0;
+}
+
+.admission-card-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.admission-card-brand-group {
+  display: flex;
+  align-items: center;
+}
+
+.admission-card-logo-container {
+  background-color: #ffffff;
+  padding: 5px 14px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
+.admission-card-original-logo {
+  height: 38px;
+  max-width: 175px;
+  width: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.admission-card-header-badge {
+  background-color: #f59e0b;
+  color: #081d42 !important;
+  padding: 5px 14px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.admission-card-header-badge span {
+  color: #081d42 !important;
+  font-weight: 800 !important;
+}
+
+/* Header Lower Title & Doodle Row */
+.admission-card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.admission-card-title-col {
+  flex: 1;
+}
+
+.admission-card-prog-h1 {
+  font-size: 23px;
+  font-weight: 800;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.admission-card-white-text {
+  color: #ffffff !important;
+}
+
+.admission-card-yellow-text {
+  color: #facc15 !important;
+}
+
+.admission-card-prog-sub {
+  font-size: 13px;
+  font-weight: 500;
+  color: #e2e8f0 !important;
+  margin: 4px 0 0 0;
+  letter-spacing: 0.2px;
+}
+
+.admission-card-header-doodle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: 'Caveat', cursive;
+  color: #ffffff !important;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  transform: rotate(-3deg);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.doodle-rays-header {
+  font-size: 12px;
+  color: #facc15 !important;
+  letter-spacing: 2px;
+  margin-bottom: -2px;
+}
+
+.doodle-underline-svg {
+  width: 50px;
+  height: 6px;
+  margin-top: 2px;
+}
+
+/* 2. Student Hero Section */
+.admission-card-hero {
+  padding: 22px 24px 10px 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background-color: #ffffff;
+}
+
+.admission-card-photo-col {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.photo-doodle-rays {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  color: #facc15;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1;
+  z-index: 5;
+}
+
+.admission-card-photo-frame {
+  width: 126px;
+  height: 142px;
+  border: 3.5px solid #facc15;
+  border-radius: 20px;
+  background-color: #ffffff;
+  padding: 2px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.admission-card-photo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 15px;
+  display: block;
+}
+
+.admission-card-photo-empty {
+  width: 100%;
+  height: 100%;
+  background-color: #f8fafc;
+  border-radius: 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.admission-card-verified-badge {
+  position: absolute;
+  bottom: -11px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #10b981;
+  color: #ffffff !important;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 11px;
+  border-radius: 9999px;
+  border: 2px solid #ffffff;
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.35);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 6;
+}
+
+.admission-card-verified-badge span {
+  color: #ffffff !important;
+  font-weight: 800 !important;
+}
+
+.admission-card-student-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.admission-card-congrat-pill {
+  display: inline-block;
+  background-color: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 9999px;
+  padding: 4px 14px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #92400e !important;
+  line-height: 18px;
+  margin-bottom: 6px;
+  white-space: nowrap;
+}
+
+.admission-card-congrat-pill .popper-icon-wrap {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 6px;
+  width: 15px;
+  height: 15px;
+}
+
+.admission-card-congrat-pill .congrat-text {
+  display: inline-block;
+  vertical-align: middle;
+  color: #92400e !important;
+  font-weight: 800 !important;
+  font-size: 12px;
+}
+
+.admission-card-student-name {
+  font-size: 27px;
+  font-weight: 900;
+  color: #0f2c4a !important;
+  margin: 0 0 8px 0;
+  line-height: 1.15;
+  text-transform: uppercase;
+  letter-spacing: -0.4px;
+  word-break: break-word;
+}
+
+.admission-card-course-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admission-card-course-pill {
+  display: inline-block;
+  background-color: #f3e8ff;
+  border: 1.5px solid #d8b4fe;
+  color: #3b0764 !important;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 13.5px;
+  font-weight: 800;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.admission-card-course-pill .book-icon-wrap {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 6px;
+  width: 16px;
+  height: 16px;
+}
+
+.admission-card-course-pill .course-text {
+  display: inline-block;
+  vertical-align: middle;
+  color: #3b0764 !important;
+  font-weight: 800 !important;
+  font-size: 13.5px;
+}
+
+.admission-card-side-doodle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: 'Caveat', cursive;
+  color: #1e3a8a !important;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  transform: rotate(-5deg);
+  user-select: none;
+}
+
+.side-doodle-rays {
+  color: #f59e0b;
+  font-size: 11px;
+  letter-spacing: 2px;
+  margin-bottom: -2px;
+}
+
+/* 3. Academic Details Container */
+.admission-card-details-box {
+  margin: 14px 24px;
+  background-color: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 18px 22px;
+}
+
+.admission-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 24px;
+}
+
+.admission-card-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admission-card-item.full-width {
+  grid-column: span 2;
+}
+
+.admission-card-icon-circle {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  flex-shrink: 0;
+}
+
+.circle-blue {
+  background-color: #dbeafe;
+  color: #2563eb;
+}
+
+.circle-pink {
+  background-color: #fce7f3;
+  color: #db2777;
+}
+
+.circle-green {
+  background-color: #d1fae5;
+  color: #059669;
+}
+
+.circle-orange {
+  background-color: #ffedd5;
+  color: #ea580c;
+}
+
+.circle-purple {
+  background-color: #ede9fe;
+  color: #7c3aed;
+}
+
+.admission-card-item-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admission-card-item-label {
+  font-size: 10px;
+  font-weight: 800;
+  color: #64748b !important;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.admission-card-item-label span {
+  color: #64748b !important;
+}
+
+.admission-card-item-val {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f2c4a !important;
+  word-break: break-word;
+  line-height: 1.25;
+}
+
+/* 4. Celebration Note with Golden Trophy */
+.admission-card-trophy-box {
+  margin: 0 24px 16px 24px;
+  background-color: #f0fdf4;
+  border: 1.5px solid #86efac;
+  border-radius: 16px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.trophy-svg-wrapper {
+  width: 68px;
+  height: 68px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.trophy-content-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.trophy-content-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #166534 !important;
+  margin-bottom: 4px;
+  line-height: 1.2;
+}
+
+.trophy-content-title span {
+  color: #166534 !important;
+}
+
+.trophy-content-text {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #374151 !important;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.trophy-side-doodle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: 'Caveat', cursive;
+  color: #15803d !important;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  transform: rotate(-6deg);
+  user-select: none;
+  flex-shrink: 0;
+  padding-left: 6px;
+}
+
+/* 5. Footer Bar */
+.admission-card-footer-bar {
+  background-color: #f1f5f9;
+  border-radius: 0 0 20px 20px;
+  padding: 12px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.footer-wave-left {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 60px;
+  height: 40px;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.footer-wave-right {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 60px;
+  height: 40px;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.admission-card-council-col {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 2;
+}
+
+.council-icon-circle {
+  width: 36px;
+  height: 36px;
+  background-color: #dbeafe;
+  color: #2563eb;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.council-text-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.council-main-title {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  color: #0f2c4a !important;
+  line-height: 1.1;
+}
+
+.council-sub-title {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #64748b !important;
+  margin-top: 2px;
+}
+
+.footer-divider-line {
+  width: 1.5px;
+  height: 28px;
+  background-color: #cbd5e1;
+  margin: 0 14px;
+  z-index: 2;
+}
+
+.admission-card-status-col {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 2;
+}
+
+.status-check-circle {
+  width: 28px;
+  height: 28px;
+  background-color: #10b981;
+  color: #ffffff !important;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+
+.status-check-circle span {
+  color: #ffffff !important;
+}
+
+.status-text-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.status-main-title {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  color: #15803d !important;
+  line-height: 1.1;
+}
+
+.status-sub-title {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #64748b !important;
+  margin-top: 2px;
+}
+
+/* ==========================================================================
+   Comprehensive Responsiveness for All Screen Sizes
+   Applied only to live UI view; export-mode keeps 600px high-res layout
+   ========================================================================== */
+
+/* 1. Medium Tablets & Small Laptops (<= 640px) */
+@media (max-width: 640px) {
+  .admission-card-outer:not(.export-mode) {
+    margin: 0 auto 20px auto;
+    border-radius: 16px;
+  }
+}
+
+/* 2. Standard Mobile Devices (<= 540px) */
+@media (max-width: 540px) {
+  .admission-card-outer:not(.export-mode) .admission-card-header {
+    padding: 16px 16px 14px 16px;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-original-logo {
+    height: 32px;
+    max-width: 140px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-header-badge {
+    font-size: 10px;
+    padding: 4px 10px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-prog-h1 {
+    font-size: 20px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-prog-sub {
+    font-size: 12px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-header-doodle {
+    font-size: 15px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-hero {
+    padding: 16px 16px 10px 16px;
+    gap: 14px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-photo-frame {
+    width: 104px;
+    height: 120px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-student-name {
+    font-size: 22px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-course-pill {
+    font-size: 12px;
+    padding: 5px 12px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-details-box {
+    margin: 12px 14px;
+    padding: 14px 16px;
+    border-radius: 14px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-item.full-width {
+    grid-column: span 1;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-trophy-box {
+    margin: 0 14px 12px 14px;
+    padding: 12px 14px;
+    border-radius: 14px;
+  }
+
+  .admission-card-outer:not(.export-mode) .trophy-svg-wrapper {
+    width: 52px;
+    height: 52px;
+  }
+
+  .admission-card-outer:not(.export-mode) .trophy-content-title {
+    font-size: 14.5px;
+  }
+
+  .admission-card-outer:not(.export-mode) .trophy-content-text {
+    font-size: 11px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-footer-bar {
+    padding: 10px 16px;
+    border-radius: 0 0 16px 16px;
+  }
+}
+
+/* 3. Small Mobile Devices (<= 460px) */
+@media (max-width: 460px) {
+  .admission-card-outer:not(.export-mode) .admission-card-header {
+    padding: 14px 12px 12px 12px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-logo-container {
+    padding: 4px 8px;
+    border-radius: 8px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-original-logo {
+    height: 28px;
+    max-width: 110px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-header-badge {
+    font-size: 9px;
+    padding: 3px 8px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-prog-h1 {
+    font-size: 17px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-prog-sub {
+    font-size: 11px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-header-doodle {
+    font-size: 13px;
+  }
+
+  .admission-card-outer:not(.export-mode) .doodle-underline-svg {
+    width: 36px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-hero {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 16px;
+    padding: 16px 12px 10px 12px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-student-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-student-name {
+    font-size: 21px;
+    text-align: center;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-course-row {
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-details-box {
+    margin: 10px 10px;
+    padding: 12px 12px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-item-val {
+    font-size: 14.5px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-trophy-box {
+    margin: 0 10px 10px 10px;
+    padding: 10px 12px;
+    flex-direction: column;
+    text-align: center;
+    gap: 10px;
+  }
+
+  .admission-card-outer:not(.export-mode) .trophy-side-doodle {
+    transform: none;
+    padding-left: 0;
+    font-size: 16px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-footer-bar {
+    padding: 10px 12px;
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+  }
+
+  .admission-card-outer:not(.export-mode) .footer-divider-line {
+    display: none;
+  }
+}
+
+/* 4. Ultra-Small Devices (<= 360px - Galaxy Fold / iPhone SE) */
+@media (max-width: 360px) {
+  .admission-card-outer:not(.export-mode) .admission-card-prog-h1 {
+    font-size: 15px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-original-logo {
+    height: 24px;
+    max-width: 95px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-photo-frame {
+    width: 90px;
+    height: 105px;
+  }
+
+  .admission-card-outer:not(.export-mode) .admission-card-student-name {
+    font-size: 19px;
+  }
+}

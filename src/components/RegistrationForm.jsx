@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './RegistrationForm.css';
-import { buildCongratulatoryMessage } from './SuccessCard';
+import SuccessCard, { buildCongratulatoryMessage } from './SuccessCard';
 
 const CLASS_OPTIONS = [
   '1st Class',
@@ -411,6 +411,21 @@ export default function RegistrationForm({ onSuccess }) {
         throw new Error(data.error || 'Submission failed. Please verify your details.');
       }
 
+      let photoDataUri = null;
+      if (compressedPhoto || photo) {
+        try {
+          const photoToRead = compressedPhoto || photo;
+          photoDataUri = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(photoToRead);
+          });
+        } catch (e) {
+          console.warn('Could not read photo data URI:', e);
+        }
+      }
+
       const resultPayload = {
         referenceId: data.submissionId,
         name: formData.name.trim(),
@@ -422,8 +437,9 @@ export default function RegistrationForm({ onSuccess }) {
         address: formData.address.trim(),
         fileName: file.name,
         photoName: photo.name,
-        photoUrl: data.photoUrl || photoPreview,
+        photoUrl: data.photoUrl || photoDataUri || photoPreview,
         remotePhotoUrl: data.photoUrl,
+        photoDataUri: photoDataUri || data.photoUrl || photoPreview,
         timestamp: data.timestamp
       };
 
@@ -515,78 +531,7 @@ export default function RegistrationForm({ onSuccess }) {
   // ============================================================================
   if (submittedData) {
     return (
-      <div className="rf-container">
-        <div className="rf-confirmation">
-          <div className="rf-success-badge">✓</div>
-          <h2 className="rf-confirm-title">🎉 Heartiest Congratulations, {submittedData.name}! 🎓</h2>
-          <p className="rf-confirm-desc">
-            Your admission registration for <strong>{submittedData.course}</strong> has been successfully submitted and verified.
-          </p>
-
-          {submittedData.photoUrl && (
-            <div className="rf-confirm-photo-box">
-              <img
-                src={submittedData.photoUrl}
-                alt="Student Passport Photo"
-                className="rf-confirm-student-avatar"
-              />
-              <div className="rf-confirm-photo-label">Student Photo</div>
-            </div>
-          )}
-
-          <div className="rf-ref-box">
-            <div className="rf-ref-row">
-              <span className="rf-ref-label">Reference ID</span>
-              <span className="rf-ref-val">
-                <span className="rf-ref-id">{submittedData.referenceId}</span>
-              </span>
-            </div>
-            <div className="rf-ref-row">
-              <span className="rf-ref-label">Applicant Name</span>
-              <span className="rf-ref-val">{submittedData.name}</span>
-            </div>
-            <div className="rf-ref-row">
-              <span className="rf-ref-label">Father's Name</span>
-              <span className="rf-ref-val">{submittedData.fatherName}</span>
-            </div>
-            <div className="rf-ref-row">
-              <span className="rf-ref-label">Mobile Number</span>
-              <span className="rf-ref-val">{submittedData.mobileNumber}</span>
-            </div>
-            {submittedData.alternateMobile && (
-              <div className="rf-ref-row">
-                <span className="rf-ref-label">Alternate Mobile</span>
-                <span className="rf-ref-val">{submittedData.alternateMobile}</span>
-              </div>
-            )}
-            <div className="rf-ref-row">
-              <span className="rf-ref-label">Class</span>
-              <span className="rf-ref-val">{submittedData.studentClass}</span>
-            </div>
-            <div className="rf-ref-row">
-              <span className="rf-ref-label">Course</span>
-              <span className="rf-ref-val">{submittedData.course}</span>
-            </div>
-            <div className="rf-ref-row">
-              <span className="rf-ref-label">Student Photo</span>
-              <span className="rf-ref-val">{submittedData.photoName || 'Uploaded'}</span>
-            </div>
-            <div className="rf-ref-row">
-              <span className="rf-ref-label">Aadhaar Document</span>
-              <span className="rf-ref-val">{submittedData.fileName}</span>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-            <button type="button" className="rf-btn-submit" onClick={handleShare} style={{ flex: 1, backgroundColor: '#10b981' }}>
-              Share via WhatsApp
-            </button>
-            <button type="button" className="rf-btn-secondary" onClick={handleReset} style={{ flex: 1 }}>
-              Register Another
-            </button>
-          </div>
-        </div>
-      </div>
+      <SuccessCard submissionData={submittedData} onReset={handleReset} />
     );
   }
 
